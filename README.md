@@ -6,7 +6,7 @@ I've written this program because:
 * I hate how my second monitor view gets messed up, if resolution switches on my primary one. I like watching something besides playing turn based games and now I can do it while playing King of Dragon Pass.
 
 #### Current Release
-v0.2.0: https://github.com/J-d-H/KoDP-Launcher/releases/tag/v0.2.0
+v0.2.1: https://github.com/J-d-H/KoDP-Launcher/releases/tag/v0.2.1
 
 ### Update: Simple Version
 
