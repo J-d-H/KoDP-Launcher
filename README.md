@@ -1,11 +1,29 @@
-### King of Dragon Pass launcher
+## King of Dragon Pass launcher
 Scaled fullscreen launcher for King of Dragon Pass. Also search for blocking processes (SetPoint) and terminates/restarts them.
 
 I've written this program because:
 * KoDP didn't launch at my system.
 * I hate how my second monitor view gets messed up, if resolution switches on my primary one. I like watching something besides playing turn based games and now I can do it while playing King of Dragon Pass.
 
+#### Current Release
+v0.2.0: https://github.com/J-d-H/KoDP-Launcher/releases/tag/v0.2.0
 
+### Update: Simple Version
+
+I just added a simpler version of the launcher, that only does he scaling after launching the game.
+I recommend the KoDP-launcher-fullscreen-only.exe whenever possible, because it doesn't search through 
+your running processes.
+
+#### Installation
+Just drop the KoDP-Launcher-fullscreen-only.exe inside your King of Dragon Pass installation directory.
+Remove the "Launch with 640 x 480" setting from the compatibility tab of your KoDP.exe.
+And you are ready to go.
+
+
+
+### Blocking-Processes-Version
+
+The version that searches blocking processes is still available in the master branch.
 
 WARNING: This program may messes a lot with your processes running. Use at your own risk!
 
