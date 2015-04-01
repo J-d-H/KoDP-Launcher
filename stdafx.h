@@ -7,7 +7,6 @@
 
 #include "targetver.h"
 
-#include <ph.h>
 #include <Windowsx.h>
 #include <windows.h>
 #include <stdio.h>

@@ -83,74 +83,6 @@ bool searchGameWindow() {
 	return g_hwndMain != NULL;
 }
 
-std::string readLine() {
-	char buffer[1024];
-	size_t read;
-	_cgets_s(buffer, &read);
-	std::string r(buffer);
-	return r;
-}
-
-enum RememberedMode : DWORD {
-	NONE,
-	TERMINATE,
-	RESTART
-};
-std::map<std::wstring, RememberedMode> readConfig() {
-	std::map<std::wstring, RememberedMode> r;
-
-	std::wifstream cf("KoDP-Launcher.cfg");
-
-	if (!cf.bad()) {
-		std::wstringstream contentstream;
-		contentstream << cf.rdbuf();
-		auto content = contentstream.str();
-
-		size_t nl;
-		while ((nl = content.find(L'\n')) != content.npos) {
-			auto line = content.substr(0, nl);
-			if (content.length() > nl) {
-				content = content.substr(nl+1);
-			} else {
-				content = L"";
-			}
-
-			size_t tab = line.find(L'\t');
-			if (tab > 0) {
-				auto file = line.substr(0, tab);
-				auto modestr = line.substr(tab+1);
-				RememberedMode mode = NONE;
-				std::wstringstream ss(std::ios_base::in | std::ios_base::out);
-				ss << modestr;
-				ss >> (DWORD&)mode;
-				r[file] = mode;
-			}
-		}
-	}
-
-	cf.close();
-
-	return r;
-}
-void writeConfig(std::map<std::wstring, RememberedMode> const &config) {
-	std::wstringstream contentstream;
-
-	bool newline = false;
-	for each (auto p in config)
-	{
-		contentstream << p.first << L'\t' << (size_t)p.second << L'\n';
-	}
-
-	std::wofstream cf("KoDP-Launcher.cfg");
-
-	cf << contentstream.str();
-
-	cf.close();
-}
-
-
-
-
 
 
 HWND CreateFullscreenWindow(HWND hwnd, bool asChild = false) {
@@ -247,7 +179,6 @@ int __cdecl _tmain(int argc, _TCHAR* argv[])
 
 	g_hInstance = GetModuleHandle(NULL);
 	STARTUPINFOA info ={sizeof(STARTUPINFOA)};
-	std::set<std::wstring> toRestart;
 
 	{
 		// setting codepage
@@ -278,160 +209,16 @@ int __cdecl _tmain(int argc, _TCHAR* argv[])
 		}
 	}
 
-#ifdef X86
-	{
-		BOOL isWow64 = false;
-		if (!IsWow64Process(GetCurrentProcess(), &isWow64)) {
-			std::wcout << "Remember: Don't run this 32 Bit Programm with an 64 bit OS. Use the 64 Bit version instead" << std::endl;
-		} else if (isWow64) {
-			std::wcout << "ERROR: Detected 64 Bit OS.\nDon't run this 32 Bit Programm with an 64 bit OS. Use the 64 Bit version instead." << std::endl;
-			Sleep(5000);
-			return 1;
-		}
-	}
-#endif
-
-	if (!GrantDebugPrivilege()) {
-		std::wcout << "ERROR: Could not enable the debug privilege." << std::endl;
-	}
-
-	{
-		std::wcout << "Initializing PhLib ..." << std::endl;
-		NTSTATUS err = PhInitializePhLibEx(PHLIB_INIT_MODULE_NTIMPORTS | PHLIB_INIT_TOKEN_INFO, 0, 0);
-		if (!NT_SUCCESS(err)) {
-			std::wcout << "Error initializing PhLib: 0x" << std::hex << err << "\n" << GetErrorText(err) << std::endl;
-		}
-	}
-
-	std::wcout << "Reading config." << std::endl;
-
-	auto config = readConfig();
-
 	std::wcout << "Launching King of Dragon Path..." << std::endl;
 
 	if (CreateProcessA(NULL, "KoDP.exe -w", NULL, NULL, TRUE, 0, NULL, NULL, &info, &g_processInfo))
 	{
 		Sleep(500);
 		while (!searchGameWindow()) {
-			std::wcout << "window not found. Searching blocking processes..." << std::endl;
+			std::wcout << "Window not found. This version does not search for blocking processes ..." << std::endl;
 
-			//listWCT(processInfo.dwProcessId);
-			std::set<DWORD> blockingIds = getPossibleBlockingProcessIds(g_processInfo.dwProcessId);
-
-			std::wcout << "\nFound " << blockingIds.size() << " possible blocking processed:" << std::endl;
-			for each (DWORD id in blockingIds)
-			{
-				HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, false, id);
-				if (!hProcess) {
-					auto err = GetLastError();
-					std::wcout << "Error opening process: 0x" << std::hex << err << std::endl;
-					std::wcout << GetErrorText(err) << std::endl;
-				} else {
-					std::wstring file;
-					{
-						PPH_STRING cl;
-						BOOLEAN isWow64 = false;
-						NTSTATUS err;
-#ifdef X86
-						err = PhGetProcessIsWow64(hProcess, &isWow64);
-						if (err) {
-							std::wcout << "PhGetProcessIsWow64 error 0x" << std::hex << err << ": " << GetErrorText(err);
-						}
-#endif
-						PH_PEB_OFFSET offset = PH_PEB_OFFSET::PhpoCommandLine;
-						if (isWow64) offset = (PH_PEB_OFFSET)(offset | PH_PEB_OFFSET::PhpoWow64);
-						err = PhGetProcessPebString(hProcess, offset, &cl);
-						if (err) {
-							std::wcout << "PhGetProcessPebString error 0x" << std::hex << err << ": " << GetErrorText(err);
-							file = getProcessFileW(id);
-						} else {
-							file = std::wstring(cl->Buffer);
-						}
-						if (cl) PhDereferenceObject(cl);
-					}
-					std::wcout << "0x" << std::hex << id << ": " << file << std::endl;
-
-					bool remember = false;
-					bool terminate = false;
-					bool restart = false;
-					RememberedMode mode = NONE;
-					{
-						const auto found = config.find(file);
-						if (found != config.cend()) {
-							mode = found->second;
-						}
-					}
-					if (mode == NONE)
-					{
-						std::wcout << "Terminate Process (y/n/q)? ";
-						std::string input;// = readLine();
-						std::cin >> input;
-						if ((input.compare("q") == 0) || (input.compare("quit") == 0)) {
-							std::wcout << "Terminating King of Dragon Pass... ";
-							TerminateProcess(g_processInfo.hProcess, 0);
-							goto cleanup;
-						}
-
-						terminate = (input.compare("y")==0) || (input.compare("yes")==0);
-
-						if (terminate) {
-							std::wcout << "Restart later (y/n/q)? ";
-							//input = readLine();
-							std::cin >> input;
-							if ((input.compare("q") == 0) || (input.compare("quit") == 0)) {
-								std::wcout << "Terminating King of Dragon Pass... ";
-								TerminateProcess(g_processInfo.hProcess, 0);
-								goto cleanup;
-							}
-							restart = (input.compare("y")==0) || (input.compare("yes")==0);
-						}
-
-						std::wcout << "Remember (y/n/q)? ";
-						//input = readLine();
-						std::cin >> input;
-						if ((input.compare("q") == 0) || (input.compare("quit") == 0)) {
-							std::wcout << "Terminating King of Dragon Pass... ";
-							TerminateProcess(g_processInfo.hProcess, 0);
-							goto cleanup;
-						}
-						remember = (input.compare("y")==0) || (input.compare("yes")==0);
-
-						if (remember) {
-							if (restart)        config[file] = RESTART;
-							else if (terminate) config[file] = TERMINATE;
-							else                config[file] = NONE;
-						}
-					} else if (mode == TERMINATE) {
-						terminate = true;
-					} else if (mode == RESTART) {
-						terminate = true;
-						restart = true;
-					}
-					if (terminate) {
-						if (TerminateProcess(hProcess, 0)) {
-							std::wcout << "terminating..." << std::endl; // TODO: send WM_QUIT?
-							::WaitForSingleObject(hProcess, 2000);
-
-							if (restart) {
-								toRestart.insert(file);
-							}
-
-						} else {
-							auto err = GetLastError();
-							std::wcout << "Error terminating: " << err << std::endl;
-							std::wcout << GetErrorText(err) << std::endl;
-						}
-					}
-
-					CloseHandle(hProcess);
-				}
-			}
-
-			Sleep(500);
+			Sleep(1000);
 		}
-
-		std::wcout << "Saving config." << std::endl;
-		writeConfig(config);
 
 		auto windowTitle = cycleStrBuffer();
 		GetWindowText(g_hwndMain, windowTitle, cycleStrBufLen);
@@ -475,7 +262,6 @@ int __cdecl _tmain(int argc, _TCHAR* argv[])
 
 			TerminateProcess(g_processInfo.hProcess, 0);
 		}
-cleanup:
 
 		::WaitForSingleObject(g_processInfo.hProcess, INFINITE);
 		std::wcout << "finished." << std::endl;
@@ -496,54 +282,6 @@ cleanup:
 
 		CloseHandle(g_processInfo.hThread);
 		CloseHandle(g_processInfo.hProcess);
-
-		if (toRestart.size() > 0) {
-			std::wcout << "Trying to restart processes:" << std::endl;
-
-			for each (auto file in toRestart)
-			{
-				std::wcout << file;
-				PROCESS_INFORMATION processInfo;
-				STARTUPINFOW info = {sizeof(STARTUPINFOW)};
-				auto args = cycleStrBufferW();
-				wcscpy_s(args, cycleStrBufLen, file.c_str());
-				std::wstring wdir;
-				if (file.at(0) == L'"') {
-					wdir = file.substr(1, file.find(L'"', 1));
-					auto sep = wdir.rfind(L'\\');
-					if (sep != wdir.npos && sep > 2) {
-						wdir = wdir.substr(0, sep + 1);
-					} else {
-						wdir = L"";
-					}
-				} else {
-					auto sep = wdir.rfind(L' ');
-					if (sep != wdir.npos && sep > 2) {
-						wdir = wdir.substr(0, sep);
-						auto sep = wdir.rfind(L'\\');
-						if (sep != wdir.npos && sep > 2) {
-							wdir = wdir.substr(0, sep + 1);
-						} else {
-							wdir = L"";
-						}
-					} else {
-						wdir = L"";
-					}
-				}
-				wcscpy_s(args, cycleStrBufLen, file.c_str());
-				if (CreateProcessW(NULL, args, NULL, NULL, FALSE, 0, NULL, ((wdir.length() > 0) ? wdir.c_str() : NULL), &info, &processInfo)) {
-					std::wcout << " - Hope this worked..." << std::endl;
-					CloseHandle(processInfo.hThread);
-					CloseHandle(processInfo.hProcess);
-				} else {
-					std::wcout << " - that didn't work..." << std::endl;
-					auto err = GetLastError();
-					std::wcout << "Error: 0x" << std::hex << err << std::endl;
-					std::wcout << GetErrorText(err);
-				}
-			}
-		}
-
 	} else {
 		auto err = GetLastError();
 		std::wcout << "stating King of Dragon Path failed: " << std::hex << err << std::endl;

@@ -1,4 +1,0 @@
-[submodule "ProcessHacker"]
-	path = ProcessHacker
-	url = https://github.com/PKRoma/ProcessHacker.git
-	branch = 2.x
