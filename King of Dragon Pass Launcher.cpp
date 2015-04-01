@@ -5,6 +5,8 @@
 
 #include "WCT.h"
 
+DWORD WINAPI hookMessageLoopWithFancyWindowMovingToFixMouseClicksNotDoAnythingEvenThoughTheyToggleButtonDownEffectsInGame(LPVOID);
+
 HINSTANCE g_hInstance;
 PROCESS_INFORMATION g_processInfo;
 HWND g_hwndMain = NULL;
@@ -240,6 +242,9 @@ void toggleFullScreen(HWND hwnd, bool isChild = false) {
 
 int __cdecl _tmain(int argc, _TCHAR* argv[])
 {
+	DWORD idThread = 0; // Message Loop Thread id
+	HANDLE hThread = NULL; // Message Loop Thread handle
+
 	g_hInstance = GetModuleHandle(NULL);
 	STARTUPINFOA info ={sizeof(STARTUPINFOA)};
 	std::set<std::wstring> toRestart;
@@ -449,66 +454,38 @@ int __cdecl _tmain(int argc, _TCHAR* argv[])
 		//MoveWindow(g_hwndRender, 0, 0, 640, 480, FALSE);
 
 		// Scaling init
-		{
-			std::wcout << "Initializing scaler..." << std::endl;
+		hThread = CreateThread(
+			NULL,        // default security attributes
+			0,           // use default stack size  
+			hookMessageLoopWithFancyWindowMovingToFixMouseClicksNotDoAnythingEvenThoughTheyToggleButtonDownEffectsInGame,
+			NULL,        // argument to thread function 
+			0,           // use default creation flags 
+			&idThread);  // returns the thread identifier
 
-			HWND hDest = CreateFullscreenWindow(g_hwndChild, true);
-			//MoveWindow(hDest, 700, 200, 640, 480, TRUE);
-			//ShowWindow(hDest, SW_SHOW);
-			//UpdateWindow(hDest);
-			std::wcout << "\nWaiting for King of Dragon Pass to finish... ";
-			DWORD exitCode;
-			// Message LOOP
-			MSG msg;
-			MouseScale ms = scaleGame(g_hwndRender, hDest);
-			while (true) 
-			{
-				if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-				//if (GetMessage(&msg, NULL, 0, 0)) {
-					if (!GetExitCodeProcess(g_processInfo.hProcess, &exitCode) || (exitCode != STILL_ACTIVE))
-					{
-						// well the game was quit (or crashed?)
-						break;
-					}
-					if (WM_KEYFIRST <= msg.message && msg.message <= WM_KEYLAST) {
-						//SendMessage(g_hwndMain, msg.message, msg.wParam, msg.lParam);
-						//SendMessage(g_hwndChild, msg.message, msg.wParam, msg.lParam);
-						SendMessage(g_hwndRender, msg.message, msg.wParam, msg.lParam);
-					} else if (WM_MOUSEFIRST <= msg.message && msg.message <= WM_MOUSELAST) {
-						int mPosX = GET_X_LPARAM(msg.lParam);
-						int mPosY = GET_Y_LPARAM(msg.lParam);
-						int xPos = (int)((mPosX - ms.offX) / ms.scale);
-						int yPos = (int)((mPosY - ms.offY) / ms.scale);
-						// Move the game window, because the mouse click doesn't work otherwise...
-						MoveWindow(g_hwndRender, mPosX - xPos, mPosY - yPos, 640, 480, TRUE);
-						SendMessage(g_hwndRender, msg.message, msg.wParam, MAKELPARAM(xPos, yPos));//*/
-						//SendMessage(g_hwndChild, msg.message, msg.wParam, MAKELPARAM(xPos, yPos));
-					} else if (msg.message == WM_PAINT) {
-						//PostMessage(g_hwndMain, msg.message, msg.wParam, msg.lParam);
-						ms = scaleGame(g_hwndRender, hDest);
-					} else {
-						SendMessage(g_hwndMain, msg.message, msg.wParam, msg.lParam);
-						//SendMessage(g_hwndRender, msg.message, msg.wParam, msg.lParam);
-					}
-					TranslateMessage(&msg);
-					DispatchMessage(&msg);
-				}
-				if (!GetExitCodeProcess(g_processInfo.hProcess, &exitCode) || (exitCode != STILL_ACTIVE))
-				{
-					// well the game was quit (or crashed?)
-					break;
-				}
-				//ms = scaleGame(g_hwndRender, hDest);
-			}
-			DestroyWindow(hDest);
+		DWORD waitResult;
+		if (hThread) {
+			waitResult = ::WaitForSingleObject(hThread, 2500);
 		}
+		if (hThread && waitResult == WAIT_FAILED) {
+			ShowWindow(GetConsoleWindow(), SW_SHOW);
+			auto err = GetLastError();
+			std::wcout << "Error in hook message thread: " << err << std::endl;
+			std::wcout << GetErrorText(err) << std::endl;
+			std::wcout << "Terminating ... ";
 
-
+			TerminateProcess(g_processInfo.hProcess, 0);
+		}
 cleanup:
+
 		::WaitForSingleObject(g_processInfo.hProcess, INFINITE);
 		std::wcout << "finished." << std::endl;
 
 		ShowWindow(GetConsoleWindow(), SW_SHOW);
+
+		if (hThread) {
+			CloseHandle(hThread);
+			hThread = NULL;
+		}
 
 		if (g_hdcRender) {
 			ReleaseDC(g_hwndRender, g_hdcRender);
@@ -574,6 +551,67 @@ cleanup:
 	}
 
 	Sleep(5000);
+	return 0;
+}
+
+DWORD WINAPI hookMessageLoopWithFancyWindowMovingToFixMouseClicksNotDoAnythingEvenThoughTheyToggleButtonDownEffectsInGame(LPVOID lpThreadParameter) {
+	std::wcout << "Initializing scaler..." << std::endl;
+
+	HWND hDest = CreateFullscreenWindow(g_hwndChild, true);
+	//MoveWindow(hDest, 700, 200, 640, 480, TRUE);
+	//ShowWindow(hDest, SW_SHOW);
+	//UpdateWindow(hDest);
+	std::wcout << "\nWaiting for King of Dragon Pass to finish... ";
+	DWORD exitCode;
+	// Message LOOP
+	MSG msg;
+	MouseScale ms = scaleGame(g_hwndRender, hDest);
+	while (true)
+	{
+		BOOL bRet;
+
+		while ((bRet = GetMessage(&msg, NULL, 0, 0)) != 0) {
+			if (!GetExitCodeProcess(g_processInfo.hProcess, &exitCode) || (exitCode != STILL_ACTIVE))
+			{
+				// well the game was quit (or crashed?)
+				break;
+			}
+			else
+			{
+				if (WM_KEYFIRST <= msg.message && msg.message <= WM_KEYLAST) {
+					//SendMessage(g_hwndMain, msg.message, msg.wParam, msg.lParam);
+					//SendMessage(g_hwndChild, msg.message, msg.wParam, msg.lParam);
+					SendMessage(g_hwndRender, msg.message, msg.wParam, msg.lParam);
+				} else if (WM_MOUSEFIRST <= msg.message && msg.message <= WM_MOUSELAST) {
+					int mPosX = GET_X_LPARAM(msg.lParam);
+					int mPosY = GET_Y_LPARAM(msg.lParam);
+					int xPos = (int)((mPosX - ms.offX) / ms.scale);
+					int yPos = (int)((mPosY - ms.offY) / ms.scale);
+					// Move the game window, because the mouse click doesn't work otherwise...
+					MoveWindow(g_hwndRender, mPosX - xPos, mPosY - yPos, 640, 480, TRUE);
+					SendMessage(g_hwndRender, msg.message, msg.wParam, MAKELPARAM(xPos, yPos));//*/
+					//SendMessage(g_hwndChild, msg.message, msg.wParam, MAKELPARAM(xPos, yPos));
+				} else if (msg.message == WM_PAINT) {
+					//PostMessage(g_hwndMain, msg.message, msg.wParam, msg.lParam);
+					ms = scaleGame(g_hwndRender, hDest);
+				} else {
+					SendMessage(g_hwndMain, msg.message, msg.wParam, msg.lParam);
+					//SendMessage(g_hwndRender, msg.message, msg.wParam, msg.lParam);
+				}
+				TranslateMessage(&msg);
+				DispatchMessage(&msg);
+			}
+		}
+		Sleep(1);
+		if (!GetExitCodeProcess(g_processInfo.hProcess, &exitCode) || (exitCode != STILL_ACTIVE))
+		{
+			// well the game was quit (or crashed?)
+			break;
+		}
+		//ms = scaleGame(g_hwndRender, hDest);
+	}
+	DestroyWindow(hDest);
+
 	return 0;
 }
 
