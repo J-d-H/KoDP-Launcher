@@ -5,7 +5,7 @@
 #include "stdafx.h"
 
 PSTR cycleStrBufferA() {
-	const size_t alen = 10;
+	const size_t alen = 3;
 	static char aStrBufs[alen][cycleStrBufLen];
 	static size_t cur = 0;
 	PSTR strbuffer = aStrBufs[cur];
@@ -16,7 +16,7 @@ PSTR cycleStrBufferA() {
 }
 
 PWSTR cycleStrBufferW() {
-	const size_t alen = 10;
+	const size_t alen = 3;
 	static wchar_t aStrBufs[alen][cycleStrBufLen];
 	static size_t cur = 0;
 	PWSTR strbuffer = aStrBufs[cur];
@@ -27,7 +27,7 @@ PWSTR cycleStrBufferW() {
 }
 
 PTSTR cycleStrBuffer() {
-	const size_t alen = 10;
+	const size_t alen = 3;
 	static TCHAR aStrBufs[alen][cycleStrBufLen];
 	static size_t cur = 0;
 	PTSTR strbuffer = aStrBufs[cur];

@@ -3,8 +3,6 @@
 
 #include "stdafx.h"
 
-#include "WCT.h"
-
 DWORD WINAPI hookMessageLoopWithFancyWindowMovingToFixMouseClicksNotDoAnythingEvenThoughTheyToggleButtonDownEffectsInGame(LPVOID);
 
 HINSTANCE g_hInstance;

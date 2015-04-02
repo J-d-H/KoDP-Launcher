@@ -15,12 +15,8 @@
 #include <iostream>
 #include <conio.h>
 
-#include <vector>
-#include <set>
 #include <map>
 
-#include <sstream>
-#include <fstream>
 #include <locale>
 
 const size_t cycleStrBufLen = 1024;
